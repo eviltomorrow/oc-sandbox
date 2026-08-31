@@ -10,17 +10,17 @@
 ## 构建镜像（`just`，只需一次）
 
 ```bash
-cd ~/Workspaces/space-rust/sandbox
+cd ~/workspace/oc-sandbox
 just build                                     # 直连
-INSTALL_PROXY=http://192.168.16.140:1081 just build   # 走代理装 opencode
+INSTALL_PROXY=http://192.168.xx.xx:1081 just build   # 走代理装 opencode
 ```
 
 ## 日常使用（`oc`）
 
 ```bash
-ln -s ~/Workspaces/space-rust/sandbox/scripts/oc ~/.local/bin/oc
+ln -s ~/workspace/oc-sandbox/scripts/oc ~/.local/bin/oc
 
-cd ~/Workspaces/space-rust
+cd ~/workspace
 oc up                       # 交互 TUI（不传目录 = 当前目录）
 oc run "重构 main.go"        # 非交互
 OC_GIT=1 oc up              # + git push 权限（挂载 ~/.ssh 等）
@@ -53,7 +53,7 @@ oc env / oc config          # 排查当前生效配置
 容器内是 `dev` 用户（无 root），工具链按需装到 `/home/dev`（`oc-home` 卷），**重启保留**，进沙箱自动加载：
 
 ```bash
-cd ~/Workspaces/space-rust
+cd ~/workspace
 oc install rust              # rustup → ~/.cargo
 oc install go                # → ~/.local/opt/go
 oc install node              # LTS；也可 oc install node 22
