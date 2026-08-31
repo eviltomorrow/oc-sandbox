@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 ARG UID=1000
 ARG GID=1000
@@ -6,14 +6,15 @@ ARG OC_VERSION=latest
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# TUNA mirror. bookworm-slim ships no ca-certificates, so bootstrap it with
+# TUNA mirror. trixie-slim ships no ca-certificates, so bootstrap it with
 # TLS peer verification disabled (apt still verifies the signed InRelease,
 # so packages remain authenticated).
 RUN rm -f /etc/apt/sources.list.d/debian.sources \
  && printf '%s\n' \
-      'deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bookworm main contrib non-free non-free-firmware' \
-      'deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bookworm-updates main contrib non-free non-free-firmware' \
-      'deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bookworm-backports main contrib non-free non-free-firmware' \
+      'deb https://mirrors.tuna.tsinghua.edu.cn/debian/ trixie main contrib non-free non-free-firmware' \
+      'deb https://mirrors.tuna.tsinghua.edu.cn/debian/ trixie-updates main contrib non-free non-free-firmware' \
+      'deb https://mirrors.tuna.tsinghua.edu.cn/debian/ trixie-backports main contrib non-free non-free-firmware' \
+      'deb https://mirrors.tuna.tsinghua.edu.cn/debian-security trixie-security main contrib non-free non-free-firmware' \
       > /etc/apt/sources.list \
  && apt-get -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false update \
  && apt-get -o Acquire::https::Verify-Peer=false -o Acquire::https::Verify-Host=false install -y --no-install-recommends ca-certificates \
@@ -34,6 +35,7 @@ RUN apt-get update \
       htop \
       iproute2 \
       jq \
+      just \
       less \
       net-tools \
       openssh-client \
@@ -52,11 +54,6 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && ln -s /usr/bin/batcat /usr/local/bin/bat \
  && ln -s /usr/bin/fdfind /usr/local/bin/fd
-
-# just 只在 bookworm-backports（sources.list 已启用）
-RUN apt-get update \
- && apt-get install -y -t bookworm-backports --no-install-recommends just \
- && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g ${GID} dev \
  && useradd -m -u ${UID} -g ${GID} -s /bin/bash dev
