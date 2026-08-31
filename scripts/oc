@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_SRC="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SRC")" && pwd)"
 COMPOSE_DIR="$(dirname "$SCRIPT_DIR")"
 COMPOSE_FILE="$COMPOSE_DIR/compose.yaml"
 
@@ -192,7 +193,11 @@ cmd_install() {
       -e "no_proxy=localhost,127.0.0.1,::1"
     )
   fi
-  docker_compose run --rm -T "${proxy_env[@]}" oc bash "/opt/toolchains/$tool.sh" "$@"
+  # TTY 下用 -t：Ctrl+C 才会把 SIGINT 转发进容器停掉安装；
+  # 非交互环境（管道/CI）退回 -T，避免 "the input device is not a TTY"。
+  local tty=(-T)
+  if [[ -t 0 ]]; then tty=(-t); fi
+  docker_compose run --rm "${tty[@]}" "${proxy_env[@]}" oc bash "/opt/toolchains/$tool.sh" "$@"
 }
 
 list_tools() {
