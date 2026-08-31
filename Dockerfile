@@ -22,14 +22,40 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       bash \
+      bash-completion \
+      bat \
+      build-essential \
+      ca-certificates \
       curl \
+      dnsutils \
+      fd-find \
+      file \
       git \
+      htop \
+      iproute2 \
+      jq \
+      less \
+      net-tools \
       openssh-client \
       procps \
       python3 \
       ripgrep \
+      tar \
+      tcpdump \
+      tmux \
+      tree \
       unzip \
+      vim \
+      wget \
       xz-utils \
+      zip \
+ && rm -rf /var/lib/apt/lists/* \
+ && ln -s /usr/bin/batcat /usr/local/bin/bat \
+ && ln -s /usr/bin/fdfind /usr/local/bin/fd
+
+# just 只在 bookworm-backports（sources.list 已启用）
+RUN apt-get update \
+ && apt-get install -y -t bookworm-backports --no-install-recommends just \
  && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g ${GID} dev \
