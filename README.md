@@ -78,11 +78,12 @@ INSTALL_PROXY=http://192.168.16.140:1081 oc install rust   # 走代理
 | opencode 会话/认证 | `oc-home-<项目>-<hash>` 卷 | 保留 |
 | `oc install` 工具链 | 同上卷内 `~/.cargo`、`~/.local/opt` 等 | 保留（自动加载 PATH） |
 | git 全局配置 | 宿主 `~/.gitconfig`（ro） | 保留 |
+| opencode skill（自动加载） | 宿主 `~/.agents/skills`、`~/.claude/skills`（ro） | 保留 |
 | git 身份 | 环境变量注入 | 每次进入都有 |
 | SSH 密钥 / HTTPS 凭据 | 宿主（ro，需 `OC_GIT=1`） | 保留 |
 | 容器内装的任何东西（非卷路径） | 容器层 | **丢弃** |
 
-宿主文件系统在容器内不可见；容器根文件系统只读，仅 `/run` 为 tmpfs，`/tmp`、`/home/dev` 为卷。
+宿主文件系统在容器内不可见（仅 `~/.gitconfig` 与 skill 目录以 ro 方式挂载）；容器根文件系统只读，仅 `/run` 为 tmpfs，`/tmp`、`/home/dev` 为卷。
 
 ## 卷与 compose project
 

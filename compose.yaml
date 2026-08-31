@@ -27,6 +27,8 @@ services:
       - oc-tmp:/tmp
       - ./toolchains:/opt/toolchains:ro
       - ${GITCONFIG_HOST:-/dev/null}:/home/dev/.gitconfig:ro
+      - ${AGENTS_SKILLS_HOST:-/dev/null}:/home/dev/.agents/skills:ro
+      - ${CLAUDE_SKILLS_HOST:-/dev/null}:/home/dev/.claude/skills:ro
       - type: tmpfs
         target: /run
     working_dir: /workspace

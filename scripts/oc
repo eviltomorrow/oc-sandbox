@@ -72,6 +72,8 @@ setup_env() {
 
   local home="${HOME:-}"
   export GITCONFIG_HOST="${GITCONFIG_HOST:-$home/.gitconfig}"
+  export AGENTS_SKILLS_HOST="${AGENTS_SKILLS_HOST:-$home/.agents/skills}"
+  export CLAUDE_SKILLS_HOST="${CLAUDE_SKILLS_HOST:-$home/.claude/skills}"
   export SSH_DIR_HOST="${SSH_DIR_HOST:-$home/.ssh}"
   export GIT_CREDENTIALS_HOST="${GIT_CREDENTIALS_HOST:-$home/.git-credentials}"
   export OPENCODE_CONFIG_HOST="${OPENCODE_CONFIG_HOST:-$home/.config/opencode}"
