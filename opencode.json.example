@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "permission": {
+    "edit": "allow",
+    "read": "allow",
+    "grep": "allow",
+    "glob": "allow",
+    "webfetch": "ask",
+    "bash": {
+      "*": "ask",
+      "sudo *": "deny",
+      "su *": "deny",
+      "rm -rf /*": "deny",
+      "rm -rf /": "deny",
+      "dd if=* of=/dev/*": "deny",
+      "mkfs*": "deny",
+      "fdisk *": "deny",
+      "chmod -R 777 /": "deny",
+      "chown -R * /": "deny",
+      "> /dev/sd*": "deny",
+      ":(){ :|:& };:": "deny"
+    }
+  }
+}

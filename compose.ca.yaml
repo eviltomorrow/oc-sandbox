@@ -1,0 +1,4 @@
+services:
+  oc:
+    volumes:
+      - ${CA_BUNDLE_HOST:-/etc/ssl/certs/ca-certificates.crt}:/etc/ssl/certs/ca-certificates.crt:ro

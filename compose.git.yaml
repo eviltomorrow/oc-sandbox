@@ -1,0 +1,5 @@
+services:
+  oc:
+    volumes:
+      - ${SSH_DIR_HOST}:/home/dev/.ssh:ro
+      - ${GIT_CREDENTIALS_HOST}:/home/dev/.git-credentials:ro

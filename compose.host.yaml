@@ -1,0 +1,5 @@
+services:
+  oc:
+    volumes:
+      - ${OPENCODE_CONFIG_HOST}:/home/dev/.config/opencode:ro
+      - ${OPENCODE_DATA_HOST}:/home/dev/.local/share/opencode:rw

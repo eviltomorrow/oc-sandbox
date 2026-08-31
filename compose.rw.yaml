@@ -1,0 +1,3 @@
+services:
+  oc:
+    read_only: false

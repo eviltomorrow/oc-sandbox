@@ -1,0 +1,38 @@
+name: ocbox
+
+services:
+  oc:
+    build:
+      context: .
+      args:
+        UID: ${OC_UID:-1000}
+        GID: ${OC_GID:-1000}
+        OC_VERSION: ${OC_VERSION:-latest}
+        INSTALL_PROXY: ${INSTALL_PROXY:-}
+    image: ocbox:latest
+    network_mode: host
+    init: true
+    stdin_open: true
+    tty: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${OC_MEM_LIMIT:-4g}
+    pids_limit: ${OC_PIDS_LIMIT:-256}
+    environment:
+      - OPENCODE_DISABLE_AUTOUPDATE=1
+    volumes:
+      - ${WORKSPACE_DIR}:/workspace:${OC_PROJECT_MODE:-rw}
+      - oc-home:/home/dev
+      - oc-tmp:/tmp
+      - ./toolchains:/opt/toolchains:ro
+      - ${GITCONFIG_HOST:-/dev/null}:/home/dev/.gitconfig:ro
+      - type: tmpfs
+        target: /run
+    working_dir: /workspace
+
+volumes:
+  oc-home:
+    name: oc-home-${OC_PROJECT_NAME}
+  oc-tmp:
+    name: oc-tmp-${OC_PROJECT_NAME}
