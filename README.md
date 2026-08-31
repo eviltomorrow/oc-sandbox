@@ -29,6 +29,7 @@ oc shell                    # 进沙箱 bash 调试工具链
 oc doctor                   # 自检 docker/镜像/compose/git 身份
 oc init                     # 写入 opencode.json 权限模板
 oc env / oc config          # 排查当前生效配置
+oc prune [-y]               # 清理不再需要的项目卷（见下）
 ```
 
 > 同一项目只开一个沙箱：`oc up/run/install` 以项目数据卷名为 key 加 `flock` 锁，
@@ -82,6 +83,22 @@ INSTALL_PROXY=http://192.168.16.140:1081 oc install rust   # 走代理
 | 容器内装的任何东西（非卷路径） | 容器层 | **丢弃** |
 
 宿主文件系统在容器内不可见；容器根文件系统只读，仅 `/run` 为 tmpfs，`/tmp`、`/home/dev` 为卷。
+
+## 卷与 compose project
+
+- **compose project 名按项目目录派生**（`oc env` 可见）：小写化并过滤到 `[a-z0-9_-]`，
+  与 compose 自身的 project 名规范一致。不同目录 = 不同 compose project，互不干扰。
+- **数据卷是 `external` 的，由 ocbox 自己管理**：`docker compose` 只负责挂载、不创建不回收。
+  每次 `oc up/run/install/shell` 前自动 `docker volume create`（不存在时）。这样卷不带任何
+  compose 标签，多个项目之间永远不会触发 compose 的"卷名不匹配/跨项目复用"警告。
+- 卷名 = `oc-home-<目录名>-<路径hash>` / `oc-tmp-<目录名>-<路径hash>`，与早期方案保持兼容，
+  已有卷会被原样复用、不重建。
+
+### `oc prune [-y]`
+
+清理旧方案（compose project 固定为 `ocbox`）遗留的 `oc-home-*` / `oc-tmp-*` 卷。它们对当前
+compose 完全隐身，只占磁盘。`oc prune` 会自动排除**当前项目**自己的卷，交互确认后删除；
+非交互环境加 `-y` 跳过确认。判断标准：卷带 `com.docker.compose.project=ocbox` 标签。
 
 ## 多项目 / 禁止
 

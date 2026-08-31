@@ -1,4 +1,4 @@
-name: ocbox
+name: ${OC_PROJECT_NAME:-ocbox}
 
 services:
   oc:
@@ -33,6 +33,8 @@ services:
 
 volumes:
   oc-home:
+    external: true
     name: oc-home-${OC_PROJECT_NAME}
   oc-tmp:
+    external: true
     name: oc-tmp-${OC_PROJECT_NAME}

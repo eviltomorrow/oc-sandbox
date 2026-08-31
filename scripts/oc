@@ -19,6 +19,7 @@ Usage:
   oc init <project-dir>                    Seed an opencode.json permission template
   oc config <project-dir>                  Print the effective compose config
   oc env <project-dir>                     Show resolved env/mounts for this run
+  oc prune [-y]                            Remove legacy ocbox-labeled volumes (old scheme)
   oc help                                  Show this help
 
 Env overrides:
@@ -61,6 +62,11 @@ setup_env() {
   hash="$(printf '%s' "$dir" | md5sum | cut -c1-6)"
   export OC_PROJECT_NAME="${base}-${hash}"
 
+  # compose 的 project 名：compose 要求小写、仅 [a-z0-9_-] 且不以 -/_ 开头
+  # （compose-go loader.NormalizeProjectName），这里照抄其规范化逻辑。
+  # 卷名仍用未规范化的 OC_PROJECT_NAME（保持与旧卷一致，现有数据卷照常复用）。
+  export OC_PROJECT_SLUG="$(printf '%s' "$OC_PROJECT_NAME" | LC_ALL=C tr 'A-Z' 'a-z' | tr -c 'a-z0-9_-' '\n' | tr -d '\n' | sed 's/^[-_]*//')"
+
   export OC_UID="${OC_UID:-$(id -u)}"
   export OC_GID="${OC_GID:-$(id -g)}"
 
@@ -80,7 +86,7 @@ setup_env() {
 }
 
 build_compose_args() {
-  COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+  COMPOSE_ARGS=(-f "$COMPOSE_FILE" --project-name "$OC_PROJECT_SLUG")
   if [[ "${OC_USE_HOST_CONFIG:-0}" == "1" ]]; then COMPOSE_ARGS+=(-f "$COMPOSE_DIR/compose.host.yaml"); fi
   if [[ "${OC_ROOT_RW:-0}" == "1" ]]; then COMPOSE_ARGS+=(-f "$COMPOSE_DIR/compose.rw.yaml"); fi
   if [[ "${OC_GIT:-0}" == "1" ]]; then COMPOSE_ARGS+=(-f "$COMPOSE_DIR/compose.git.yaml"); fi
@@ -127,12 +133,24 @@ git_env() {
   if [[ -n "${OC_GIT_EMAIL:-}" ]]; then GIT_ENV+=(-e "GIT_AUTHOR_EMAIL=$OC_GIT_EMAIL" -e "GIT_COMMITTER_EMAIL=$OC_GIT_EMAIL"); fi
 }
 
+# 数据卷由 ocbox 自己管理（compose 里声明为 external），compose 不做生命周期；
+# 每次 run 前确保存在，避免 "external volume not found"。
+ensure_volumes() {
+  local v
+  for v in oc-home oc-tmp; do
+    if ! docker volume inspect "$v-$OC_PROJECT_NAME" >/dev/null 2>&1; then
+      docker volume create "$v-$OC_PROJECT_NAME" >/dev/null
+    fi
+  done
+}
+
 cmd_up() {
   local dir
   dir="$(resolve_project "${1:-${OC_PROJECT:-.}}")"
   shift 2>/dev/null || true
   setup_env "$dir"
   acquire_lock "$OC_PROJECT_NAME"
+  ensure_volumes
   git_identity
   build_compose_args
   git_env
@@ -145,6 +163,7 @@ cmd_run() {
   shift 2>/dev/null || true
   setup_env "$dir"
   acquire_lock "$OC_PROJECT_NAME"
+  ensure_volumes
   git_identity
   build_compose_args
   git_env
@@ -168,6 +187,7 @@ cmd_shell() {
   dir="$(resolve_project "${1:-${OC_PROJECT:-.}}")"
   shift 2>/dev/null || true
   setup_env "$dir"
+  ensure_volumes
   git_identity
   build_compose_args
   git_env
@@ -192,6 +212,7 @@ cmd_env() {
   git_env
   printf 'WORKSPACE_DIR=%s\n' "$WORKSPACE_DIR"
   printf 'OC_PROJECT_NAME=%s\n' "$OC_PROJECT_NAME"
+  printf 'compose project : %s\n' "$OC_PROJECT_SLUG"
   printf 'OC_PROJECT_MODE=%s\n' "$OC_PROJECT_MODE"
   printf 'OC_UID=%s OC_GID=%s\n' "$OC_UID" "$OC_GID"
   printf 'git identity: name=%s email=%s\n' "${OC_GIT_NAME:-<none>}" "${OC_GIT_EMAIL:-<none>}"
@@ -211,6 +232,7 @@ cmd_doctor() {
 
   echo "ocbox doctor — project: $dir"
   echo "  data volume : oc-home-$OC_PROJECT_NAME"
+  echo "  compose prj : $OC_PROJECT_SLUG (per-project compose project)"
   echo "  compose     : ${COMPOSE_ARGS[*]}"
 
   if command -v docker >/dev/null 2>&1; then
@@ -268,6 +290,7 @@ cmd_install() {
   fi
   setup_env "${OC_PROJECT:-$(pwd)}"
   acquire_lock "$OC_PROJECT_NAME"
+  ensure_volumes
   build_compose_args
   local proxy_env=()
   if [[ -n "${INSTALL_PROXY:-}" ]]; then
@@ -289,6 +312,44 @@ list_tools() {
   ls "$COMPOSE_DIR"/toolchains/*.sh 2>/dev/null | xargs -n1 basename 2>/dev/null | sed 's/\.sh$//' | grep -v entrypoint | tr '\n' ' '
 }
 
+# 旧 scheme（project 名固定 ocbox）下的 oc-home/oc-tmp 卷对 compose 已完全隐身，
+# 只占磁盘。删掉它们（当前项目自己的卷除外）。
+cmd_prune() {
+  local force=0
+  if [[ "${1:-}" == "-y" || "${1:-}" == "-f" ]]; then force=1; fi
+
+  setup_env "${OC_PROJECT:-$(pwd)}"
+
+  local candidates
+  candidates="$({
+    docker volume ls -q --filter 'label=com.docker.compose.project=ocbox' --filter 'label=com.docker.compose.volume=oc-home' 2>/dev/null
+    docker volume ls -q --filter 'label=com.docker.compose.project=ocbox' --filter 'label=com.docker.compose.volume=oc-tmp' 2>/dev/null
+  } | sort -u | grep -vx -e "oc-home-$OC_PROJECT_NAME" -e "oc-tmp-$OC_PROJECT_NAME" || true)"
+
+  if [[ -z "$candidates" ]]; then
+    echo "ocbox: nothing to prune (no legacy ocbox-labeled volumes)" >&2
+    return
+  fi
+
+  echo "ocbox: legacy volumes to remove:"
+  printf '  %s\n' $candidates
+
+  if [[ "$force" -ne 1 ]]; then
+    if [[ -t 0 ]]; then
+      printf 'Remove them? [y/N] ' >&2
+      local ans
+      read -r ans
+      [[ "$ans" == "y" || "$ans" == "Y" ]] || { echo "ocbox: aborted" >&2; return; }
+    else
+      echo "ocbox: non-interactive — rerun with: oc prune -y" >&2
+      return 1
+    fi
+  fi
+
+  # shellcheck disable=SC2086
+  docker volume rm $candidates
+}
+
 cmd="${1:-help}"
 case "$cmd" in
   up) shift; cmd_up "$@" ;;
@@ -299,6 +360,7 @@ case "$cmd" in
   init) shift; cmd_init "$@" ;;
   config) shift; cmd_config "$@" ;;
   env) shift; cmd_env "$@" ;;
+  prune) shift; cmd_prune "$@" ;;
   help|-h|--help) usage ;;
   *) usage; exit 2 ;;
 esac
