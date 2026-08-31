@@ -3,8 +3,9 @@
 # 用法: oc install go [版本, 默认 latest]
 set -euo pipefail
 
-if command -v go >/dev/null 2>&1; then
-  echo "go 已安装: $(go version)"
+# 幂等检查：只认 oc install 自己装的路径（避免误判系统自带 go）
+if [[ -x "$HOME/.local/opt/go/bin/go" ]]; then
+  echo "go 已安装: $("$HOME/.local/opt/go/bin/go" version)"
   exit 0
 fi
 

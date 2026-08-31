@@ -3,8 +3,9 @@
 # 用法: oc install jq [版本, 默认最新 release]
 set -euo pipefail
 
-if command -v jq >/dev/null 2>&1; then
-  echo "jq 已安装: $(jq --version)"
+# 幂等检查：只认 oc install 自己装的路径（避免误判系统自带 jq）
+if [[ -x "$HOME/.local/opt/jq" ]]; then
+  echo "jq 已安装: $("$HOME/.local/opt/jq" --version)"
   exit 0
 fi
 

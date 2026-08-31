@@ -14,6 +14,8 @@ Usage:
   oc up <project-dir> [opencode args...]   Start the interactive opencode TUI
   oc run <project-dir> "prompt..."         Run opencode non-interactively
   oc install <tool> [version]              Install a toolchain into the sandbox
+  oc shell <project-dir> [cmd...]          Open a bash shell inside the sandbox
+  oc doctor <project-dir>                  Self-check docker/image/compose/git
   oc init <project-dir>                    Seed an opencode.json permission template
   oc config <project-dir>                  Print the effective compose config
   oc env <project-dir>                     Show resolved env/mounts for this run
@@ -89,6 +91,21 @@ docker_compose() {
   docker compose "${COMPOSE_ARGS[@]}" "$@"
 }
 
+# 同一项目的 oc-home 卷是共享数据（opencode.db / git 锁），禁止并发。
+# 用宿主侧的 flock 以项目卷名为 key 上锁；锁随脚本退出自动释放。
+LOCK_DIR="${LOCK_DIR:-/tmp/ocbox-locks}"
+
+acquire_lock() {
+  local key="${1:?project volume key required}"
+  mkdir -p "$LOCK_DIR"
+  exec {LOCK_FD}>"$LOCK_DIR/$key.lock"
+  if ! flock -n "$LOCK_FD"; then
+    echo "ocbox: project '$key' is already in use by another oc session" >&2
+    echo "ocbox: one sandbox per project (shared oc-home volume) — wait or use a different dir" >&2
+    exit 1
+  fi
+}
+
 git_identity() {
   local name email
   name="${OC_GIT_NAME:-}"
@@ -115,6 +132,7 @@ cmd_up() {
   dir="$(resolve_project "${1:-${OC_PROJECT:-.}}")"
   shift 2>/dev/null || true
   setup_env "$dir"
+  acquire_lock "$OC_PROJECT_NAME"
   git_identity
   build_compose_args
   git_env
@@ -126,6 +144,7 @@ cmd_run() {
   dir="$(resolve_project "${1:-${OC_PROJECT:-.}}")"
   shift 2>/dev/null || true
   setup_env "$dir"
+  acquire_lock "$OC_PROJECT_NAME"
   git_identity
   build_compose_args
   git_env
@@ -142,6 +161,17 @@ cmd_init() {
     cp "$COMPOSE_DIR/opencode.json.example" "$target"
     echo "ocbox: created $target"
   fi
+}
+
+cmd_shell() {
+  local dir
+  dir="$(resolve_project "${1:-${OC_PROJECT:-.}}")"
+  shift 2>/dev/null || true
+  setup_env "$dir"
+  git_identity
+  build_compose_args
+  git_env
+  docker_compose run --rm "${GIT_ENV[@]}" oc bash "$@"
 }
 
 cmd_config() {
@@ -169,6 +199,60 @@ cmd_env() {
   printf 'git env flags: %s\n' "${GIT_ENV[*]:-<none>}"
 }
 
+cmd_doctor() {
+  local dir
+  dir="$(resolve_project "${1:-${OC_PROJECT:-.}}")"
+  setup_env "$dir"
+  git_identity
+  build_compose_args
+  git_env
+
+  local rc=0
+
+  echo "ocbox doctor — project: $dir"
+  echo "  data volume : oc-home-$OC_PROJECT_NAME"
+  echo "  compose     : ${COMPOSE_ARGS[*]}"
+
+  if command -v docker >/dev/null 2>&1; then
+    echo "  docker cli  : $(docker --version 2>/dev/null | head -1)"
+  else
+    echo "  docker cli  : MISSING (not in PATH)"
+    rc=1
+  fi
+  if docker info >/dev/null 2>&1; then
+    echo "  docker dmon : reachable"
+  else
+    echo "  docker dmon : NOT reachable — is docker running?"
+    rc=1
+  fi
+  if docker image inspect ocbox:latest >/dev/null 2>&1; then
+    echo "  image       : ocbox:latest present"
+  else
+    echo "  image       : ocbox:latest MISSING — run: just build"
+    rc=1
+  fi
+  if docker_compose config --quiet 2>/dev/null; then
+    echo "  compose cfg : valid"
+  else
+    echo "  compose cfg : INVALID"
+    rc=1
+  fi
+
+  if [[ -n "${OC_GIT_NAME:-}" && -n "${OC_GIT_EMAIL:-}" ]]; then
+    echo "  git identity: ${OC_GIT_NAME} <${OC_GIT_EMAIL}>"
+  else
+    echo "  git identity: MISSING — set OC_GIT_NAME / OC_GIT_EMAIL"
+    rc=1
+  fi
+
+  echo "  project dir : $dir ($([ -r "$dir" ] && echo readable || echo NOT readable))"
+
+  if [[ "$rc" -eq 0 ]]; then
+    echo "  all checks passed"
+  fi
+  return "$rc"
+}
+
 cmd_install() {
   local tool="${1:-}"
   if [[ -z "$tool" ]]; then
@@ -183,6 +267,7 @@ cmd_install() {
     exit 1
   fi
   setup_env "${OC_PROJECT:-$(pwd)}"
+  acquire_lock "$OC_PROJECT_NAME"
   build_compose_args
   local proxy_env=()
   if [[ -n "${INSTALL_PROXY:-}" ]]; then
@@ -209,6 +294,8 @@ case "$cmd" in
   up) shift; cmd_up "$@" ;;
   run) shift; cmd_run "$@" ;;
   install) shift; cmd_install "$@" ;;
+  shell) shift; cmd_shell "$@" ;;
+  doctor) shift; cmd_doctor "$@" ;;
   init) shift; cmd_init "$@" ;;
   config) shift; cmd_config "$@" ;;
   env) shift; cmd_env "$@" ;;

@@ -25,9 +25,14 @@ oc up                       # 交互 TUI（不传目录 = 当前目录）
 oc run "重构 main.go"        # 非交互
 OC_GIT=1 oc up              # + git push 权限（挂载 ~/.ssh 等）
 OC_PROJECT_RO=1 oc up       # 只读审查模式
+oc shell                    # 进沙箱 bash 调试工具链
+oc doctor                   # 自检 docker/镜像/compose/git 身份
 oc init                     # 写入 opencode.json 权限模板
 oc env / oc config          # 排查当前生效配置
 ```
+
+> 同一项目只开一个沙箱：`oc up/run/install` 以项目数据卷名为 key 加 `flock` 锁，
+> 第二个会话会直接拒绝启动（避免共享 `opencode.db` / git 锁冲突）。
 
 不传目录时的优先级：显式参数 > `OC_PROJECT` 环境变量 > 当前目录。
 
@@ -81,7 +86,7 @@ INSTALL_PROXY=http://192.168.16.140:1081 oc install rust   # 走代理
 ## 多项目 / 禁止
 
 - 不同项目可同时跑（各自独立卷 + 挂载；`network_mode: host` 下 TUI/run 不占端口）
-- 同一项目只开一个沙箱（共享数据卷 → `opencode.db` / git 锁冲突）
+- 同一项目自动互斥：`oc up/run/install` 会上锁，第二个会话被拒绝（共享数据卷 → `opencode.db` / git 锁冲突）
 - `OC_USE_HOST_CONFIG=1` 时勿与宿主 opencode 同跑
 
 ## 注意

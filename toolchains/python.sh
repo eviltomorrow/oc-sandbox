@@ -3,7 +3,8 @@
 # 用法: oc install python [版本号, 如 3.12; 不传则仅装 uv]
 set -euo pipefail
 
-if ! command -v uv >/dev/null 2>&1; then
+# 幂等检查：只认 oc install 自己装的路径（避免误判系统自带 uv）
+if [[ ! -x "$HOME/.local/bin/uv" ]]; then
   mkdir -p "$HOME/.ocbox"
   curl -LsSf https://astral.sh/uv/install.sh | sh
   if ! grep -q '.local/bin' "$HOME/.ocbox/env.sh" 2>/dev/null; then
